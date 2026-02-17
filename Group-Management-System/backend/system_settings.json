@@ -1,0 +1,58 @@
+{
+  "general": {
+    "siteName": "GroupFlow",
+    "siteUrl": "http://localhost:3000",
+    "adminEmail": "neuralbishal@gmail.com",
+    "timezone": "Asia/Kolkata",
+    "dateFormat": "YYYY-MM-DD",
+    "timeFormat": "24h"
+  },
+  "security": {
+    "sessionTimeout": 30,
+    "maxLoginAttempts": 5,
+    "lockoutDuration": 15,
+    "passwordMinLength": 8,
+    "passwordRequireUppercase": true,
+    "passwordRequireLowercase": true,
+    "passwordRequireNumbers": true,
+    "passwordRequireSpecial": true,
+    "twoFactorRequired": true,
+    "sessionPerUser": true,
+    "ipWhitelist": []
+  },
+  "email": {
+    "smtpHost": "smtp.gmail.com",
+    "smtpPort": 587,
+    "smtpUser": "noreply@groupflow.com",
+    "smtpPassword": "",
+    "useTLS": true,
+    "fromEmail": "noreply@groupflow.com",
+    "fromName": "GroupFlow System"
+  },
+  "features": {
+    "allowStudentRegistration": true,
+    "allowFacultyRegistration": true,
+    "requireEmailVerification": true,
+    "requirePhoneVerification": false,
+    "maxGroupSize": 4,
+    "minGroupSize": 2,
+    "allowTopicSelection": true,
+    "maxGroupsPerTopic": 3,
+    "maxGroupsPerFaculty": 3
+  },
+  "backup": {
+    "autoBackup": true,
+    "backupFrequency": "daily",
+    "backupTime": "02:00",
+    "retentionDays": 30,
+    "lastBackup": null
+  },
+  "notifications": {
+    "emailNotifications": true,
+    "smsNotifications": true,
+    "adminAlerts": true,
+    "securityAlerts": true,
+    "backupAlerts": true,
+    "dailyDigest": false
+  }
+}

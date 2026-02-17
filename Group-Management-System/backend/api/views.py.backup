@@ -1,0 +1,596 @@
+print("🟢 Loading views.py...")
+print(f"🔍 Current file: {__file__}")
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.contrib.auth import authenticate, login, logout
+from django.db import transaction
+from django.db.models import F
+from django.contrib.auth.hashers import make_password, check_password
+from .models import *
+from .serializers import *
+from .utils import GoogleSheetsHelper, verify_student
+import logging
+from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.core.mail import send_mail
+from django.conf import settings
+from django.utils import timezone
+import pyotp
+from django.core.exceptions import ObjectDoesNotExist
+import os
+import json
+import secrets
+import string
+import subprocess
+import shutil
+from datetime import datetime
+
+from webauthn import (
+    generate_registration_options, 
+    verify_registration_response,
+    generate_authentication_options,
+    verify_authentication_response
+)
+from webauthn.helpers.structs import (
+    RegistrationCredential,
+    AuthenticatorSelectionCriteria,
+    UserVerificationRequirement,
+)
+
+logger = logging.getLogger(__name__)
+
+# [Keep all your existing functions until line ~800...]
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_paper_keys(request):
+    """Get all paper keys for the super admin"""
+    
+    if request.user.role != 'super_admin':
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        keys = EmergencyPaperKey.objects.filter(user=request.user).order_by('-created_at')
+        keys_data = [{
+            'id': key.id,
+            'key_hint': key.key_hint,
+            'created_at': key.created_at,
+            'used_at': key.used_at
+        } for key in keys]
+        
+        return Response({'success': True, 'keys': keys_data})
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_paper_key(request, key_id):
+    """Delete a specific paper key"""
+    
+    if request.user.role != 'super_admin':
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        key = EmergencyPaperKey.objects.get(id=key_id, user=request.user)
+        key.delete()
+        return Response({'success': True, 'message': 'Key deleted successfully'})
+    except EmergencyPaperKey.DoesNotExist:
+        return Response({'error': 'Key not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generate_paper_keys(request):
+    """Generate emergency paper backup keys"""
+    
+    if request.user.role != 'super_admin':
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    keys = []
+    for i in range(5):  # Generate 5 backup keys
+        # Generate random 16-character key
+        alphabet = string.ascii_letters + string.digits + '!@#$%'
+        key = ''.join(secrets.choice(alphabet) for _ in range(16))
+        
+        # Format for readability (XXXX-XXXX-XXXX-XXXX)
+        formatted_key = '-'.join([key[i:i+4] for i in range(0, 16, 4)])
+        
+        # Store hashed version
+        paper_key = EmergencyPaperKey.objects.create(
+            user=request.user,
+            key_hash=make_password(key),
+            key_hint=f"Key #{i+1} - {timezone.now().strftime('%Y-%m-%d')}"
+        )
+        
+        keys.append({
+            'id': paper_key.id,
+            'key': formatted_key,
+            'hint': f"Key #{i+1}"
+        })
+    
+    return Response({
+        'success': True,
+        'message': 'Print these keys and store in a physical safe',
+        'keys': keys
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def super_admin_analytics(request):
+    """Get comprehensive analytics for super admin"""
+    
+    if request.user.role != 'super_admin':
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Get date range for last 7 days
+        end_date = timezone.now()
+        start_date = end_date - timezone.timedelta(days=7)
+        
+        # Calculate daily activity
+        daily_activity = []
+        for i in range(7):
+            day = end_date - timezone.timedelta(days=i)
+            next_day = day + timezone.timedelta(days=1)
+            
+            logins = AdminLoginLog.objects.filter(
+                timestamp__gte=day,
+                timestamp__lt=next_day
+            ).count()
+            
+            groups = Group.objects.filter(
+                created_at__gte=day,
+                created_at__lt=next_day
+            ).count()
+            
+            selections = GroupSelection.objects.filter(
+                selected_at__gte=day,
+                selected_at__lt=next_day
+            ).count()
+            
+            daily_activity.append({
+                'date': day.date(),
+                'logins': logins,
+                'groupCreations': groups,
+                'selections': selections,
+                'total': logins + groups + selections
+            })
+        
+        analytics = {
+            'users': {
+                'total': User.objects.count(),
+                'students': Student.objects.count(),
+                'faculty': Faculty.objects.count(),
+                'admins': User.objects.filter(role='admin').count(),
+                'superAdmins': User.objects.filter(role='super_admin').count()
+            },
+            'groups': {
+                'total': Group.objects.count(),
+                'active': Group.objects.filter(is_complete=False).count(),
+                'completed': Group.objects.filter(is_complete=True).count(),
+                'twoMember': Group.objects.filter(size=2).count(),
+                'fourMember': Group.objects.filter(size=4).count()
+            },
+            'domains': {
+                'total': Domain.objects.count(),
+                'topics': Topic.objects.count()
+            },
+            'selections': {
+                'total': GroupSelection.objects.count(),
+                'approved': GroupSelection.objects.filter(is_approved=True).count(),
+                'pending': GroupSelection.objects.filter(is_approved=False).count()
+            },
+            'activity': {
+                'last7Days': daily_activity,
+                'totalLogins': AdminLoginLog.objects.filter(success=True).count(),
+                'totalActions': Group.objects.count() + GroupSelection.objects.count()
+            }
+        }
+        
+        return Response(analytics)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def super_admin_settings(request):
+    """Get or update system settings"""
+    
+    if request.user.role != 'super_admin':
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    # Default settings data
+    default_settings = {
+        'general': {
+            'siteName': 'GroupFlow',
+            'siteUrl': 'http://localhost:3000',
+            'adminEmail': 'admin@groupflow.com',
+            'timezone': 'Asia/Kolkata',
+            'dateFormat': 'YYYY-MM-DD',
+            'timeFormat': '24h'
+        },
+        'security': {
+            'sessionTimeout': 30,
+            'maxLoginAttempts': 5,
+            'lockoutDuration': 15,
+            'passwordMinLength': 8,
+            'passwordRequireUppercase': True,
+            'passwordRequireLowercase': True,
+            'passwordRequireNumbers': True,
+            'passwordRequireSpecial': True,
+            'twoFactorRequired': False,
+            'sessionPerUser': True,
+            'ipWhitelist': []
+        },
+        'email': {
+            'smtpHost': 'smtp.gmail.com',
+            'smtpPort': 587,
+            'smtpUser': 'noreply@groupflow.com',
+            'smtpPassword': '',
+            'useTLS': True,
+            'fromEmail': 'noreply@groupflow.com',
+            'fromName': 'GroupFlow System'
+        },
+        'features': {
+            'allowStudentRegistration': True,
+            'allowFacultyRegistration': False,
+            'requireEmailVerification': True,
+            'requirePhoneVerification': False,
+            'maxGroupSize': 4,
+            'minGroupSize': 2,
+            'allowTopicSelection': True,
+            'maxGroupsPerTopic': 3,
+            'maxGroupsPerFaculty': 3
+        },
+        'backup': {
+            'autoBackup': True,
+            'backupFrequency': 'daily',
+            'backupTime': '02:00',
+            'retentionDays': 30,
+            'lastBackup': None
+        },
+        'notifications': {
+            'emailNotifications': True,
+            'smsNotifications': False,
+            'adminAlerts': True,
+            'securityAlerts': True,
+            'backupAlerts': True,
+            'dailyDigest': False
+        }
+    }
+    
+    if request.method == 'GET':
+        try:
+            # Try to get from JSON file
+            settings_file = os.path.join(settings.BASE_DIR, 'system_settings.json')
+            if os.path.exists(settings_file):
+                with open(settings_file, 'r') as f:
+                    saved_settings = json.load(f)
+                return Response(saved_settings)
+            else:
+                return Response(default_settings)
+        except Exception as e:
+            return Response(default_settings)
+    
+    elif request.method == 'POST':
+        try:
+            new_settings = request.data
+            
+            # Validate required fields
+            required_sections = ['general', 'security', 'email', 'features', 'backup', 'notifications']
+            for section in required_sections:
+                if section not in new_settings:
+                    return Response({
+                        'success': False,
+                        'error': f'Missing {section} settings'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Save to JSON file
+            settings_file = os.path.join(settings.BASE_DIR, 'system_settings.json')
+            with open(settings_file, 'w') as f:
+                json.dump(new_settings, f, indent=2)
+            
+            # Log the settings change
+            RecoveryLog.objects.create(
+                user=request.user,
+                method='settings_update',
+                success=True,
+                metadata={'action': 'Settings updated'}
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Settings saved successfully'
+            })
+            
+        except Exception as e:
+            # Log failed attempt
+            RecoveryLog.objects.create(
+                user=request.user,
+                method='settings_update',
+                success=False,
+                metadata={'error': str(e)}
+            )
+            
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def super_admin_settings_reset(request):
+    """Reset settings to defaults"""
+    
+    if request.user.role != 'super_admin':
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    default_settings = {
+        'general': {
+            'siteName': 'GroupFlow',
+            'siteUrl': 'http://localhost:3000',
+            'adminEmail': 'admin@groupflow.com',
+            'timezone': 'Asia/Kolkata',
+            'dateFormat': 'YYYY-MM-DD',
+            'timeFormat': '24h'
+        },
+        'security': {
+            'sessionTimeout': 30,
+            'maxLoginAttempts': 5,
+            'lockoutDuration': 15,
+            'passwordMinLength': 8,
+            'passwordRequireUppercase': True,
+            'passwordRequireLowercase': True,
+            'passwordRequireNumbers': True,
+            'passwordRequireSpecial': True,
+            'twoFactorRequired': False,
+            'sessionPerUser': True,
+            'ipWhitelist': []
+        },
+        'email': {
+            'smtpHost': 'smtp.gmail.com',
+            'smtpPort': 587,
+            'smtpUser': 'noreply@groupflow.com',
+            'smtpPassword': '',
+            'useTLS': True,
+            'fromEmail': 'noreply@groupflow.com',
+            'fromName': 'GroupFlow System'
+        },
+        'features': {
+            'allowStudentRegistration': True,
+            'allowFacultyRegistration': False,
+            'requireEmailVerification': True,
+            'requirePhoneVerification': False,
+            'maxGroupSize': 4,
+            'minGroupSize': 2,
+            'allowTopicSelection': True,
+            'maxGroupsPerTopic': 3,
+            'maxGroupsPerFaculty': 3
+        },
+        'backup': {
+            'autoBackup': True,
+            'backupFrequency': 'daily',
+            'backupTime': '02:00',
+            'retentionDays': 30,
+            'lastBackup': None
+        },
+        'notifications': {
+            'emailNotifications': True,
+            'smsNotifications': False,
+            'adminAlerts': True,
+            'securityAlerts': True,
+            'backupAlerts': True,
+            'dailyDigest': False
+        }
+    }
+    
+    try:
+        # Save to JSON file
+        settings_file = os.path.join(settings.BASE_DIR, 'system_settings.json')
+        with open(settings_file, 'w') as f:
+            json.dump(default_settings, f, indent=2)
+        
+        RecoveryLog.objects.create(
+            user=request.user,
+            method='settings_reset',
+            success=True
+        )
+        
+        return Response({
+            'success': True,
+            'message': 'Settings reset to defaults',
+            'settings': default_settings
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def test_email(request):
+    """Test email configuration"""
+    
+    if request.user.role != 'super_admin':
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        email_config = request.data
+        
+        # Temporarily update email settings
+        old_settings = {
+            'EMAIL_HOST': settings.EMAIL_HOST,
+            'EMAIL_PORT': settings.EMAIL_PORT,
+            'EMAIL_HOST_USER': settings.EMAIL_HOST_USER,
+            'EMAIL_HOST_PASSWORD': settings.EMAIL_HOST_PASSWORD,
+            'EMAIL_USE_TLS': settings.EMAIL_USE_TLS,
+        }
+        
+        settings.EMAIL_HOST = email_config.get('smtpHost', settings.EMAIL_HOST)
+        settings.EMAIL_PORT = email_config.get('smtpPort', settings.EMAIL_PORT)
+        settings.EMAIL_HOST_USER = email_config.get('smtpUser', settings.EMAIL_HOST_USER)
+        settings.EMAIL_HOST_PASSWORD = email_config.get('smtpPassword', settings.EMAIL_HOST_PASSWORD)
+        settings.EMAIL_USE_TLS = email_config.get('useTLS', settings.EMAIL_USE_TLS)
+        
+        # Send test email
+        send_mail(
+            'Test Email from GroupFlow',
+            f'This is a test email to verify your SMTP configuration.\n\n'
+            f'Sent at: {timezone.now().strftime("%Y-%m-%d %H:%M:%S")}\n'
+            f'If you received this, your email settings are working correctly!',
+            email_config.get('fromEmail', settings.DEFAULT_FROM_EMAIL),
+            [request.user.email],
+            fail_silently=False,
+        )
+        
+        # Restore old settings
+        for key, value in old_settings.items():
+            setattr(settings, key, value)
+        
+        RecoveryLog.objects.create(
+            user=request.user,
+            method='test_email',
+            success=True
+        )
+        
+        return Response({
+            'success': True,
+            'message': f'Test email sent to {request.user.email}'
+        })
+        
+    except Exception as e:
+        RecoveryLog.objects.create(
+            user=request.user,
+            method='test_email',
+            success=False,
+            metadata={'error': str(e)}
+        )
+        
+        return Response({
+            'success': False,
+            'error': f'Email test failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def manual_backup(request):
+    """Perform manual system backup"""
+    
+    if request.user.role != 'super_admin':
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Create backup directory if it doesn't exist
+        backup_dir = os.path.join(settings.BASE_DIR, 'backups')
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        # Generate backup filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Database backup
+        db_settings = settings.DATABASES['default']
+        db_engine = db_settings['ENGINE']
+        
+        backup_info = {
+            'timestamp': timestamp,
+            'type': 'manual',
+            'files': []
+        }
+        
+        if 'sqlite' in db_engine:
+            # SQLite backup - just copy the file
+            db_path = db_settings['NAME']
+            backup_file = os.path.join(backup_dir, f'db_backup_{timestamp}.sqlite3')
+            shutil.copy2(db_path, backup_file)
+            backup_info['files'].append({
+                'type': 'database',
+                'file': f'db_backup_{timestamp}.sqlite3',
+                'size': os.path.getsize(backup_file)
+            })
+            
+        elif 'postgresql' in db_engine:
+            # PostgreSQL backup using pg_dump
+            backup_file = os.path.join(backup_dir, f'db_backup_{timestamp}.sql')
+            db_name = db_settings['NAME']
+            db_user = db_settings['USER']
+            db_host = db_settings.get('HOST', 'localhost')
+            db_port = db_settings.get('PORT', '5432')
+            
+            cmd = f"pg_dump -h {db_host} -p {db_port} -U {db_user} -d {db_name} > {backup_file}"
+            subprocess.run(cmd, shell=True, check=True)
+            backup_info['files'].append({
+                'type': 'database',
+                'file': f'db_backup_{timestamp}.sql',
+                'size': os.path.getsize(backup_file) if os.path.exists(backup_file) else 0
+            })
+        
+        # Backup media files if MEDIA_ROOT is defined
+        if hasattr(settings, 'MEDIA_ROOT') and os.path.exists(settings.MEDIA_ROOT):
+            media_backup = os.path.join(backup_dir, f'media_backup_{timestamp}.zip')
+            shutil.make_archive(media_backup.replace('.zip', ''), 'zip', settings.MEDIA_ROOT)
+            backup_info['files'].append({
+                'type': 'media',
+                'file': f'media_backup_{timestamp}.zip',
+                'size': os.path.getsize(media_backup) if os.path.exists(media_backup) else 0
+            })
+        
+        # Save backup info
+        info_file = os.path.join(backup_dir, f'backup_{timestamp}.json')
+        with open(info_file, 'w') as f:
+            json.dump(backup_info, f, indent=2)
+        
+        # Update last backup time in settings
+        settings_file = os.path.join(settings.BASE_DIR, 'system_settings.json')
+        if os.path.exists(settings_file):
+            with open(settings_file, 'r') as f:
+                current_settings = json.load(f)
+            if 'backup' not in current_settings:
+                current_settings['backup'] = {}
+            current_settings['backup']['lastBackup'] = timestamp
+            with open(settings_file, 'w') as f:
+                json.dump(current_settings, f, indent=2)
+        
+        # Log the backup
+        RecoveryLog.objects.create(
+            user=request.user,
+            method='manual_backup',
+            success=True,
+            metadata=backup_info
+        )
+        
+        return Response({
+            'success': True,
+            'message': 'Backup completed successfully',
+            'backup': backup_info
+        })
+        
+    except Exception as e:
+        # Log failed backup
+        RecoveryLog.objects.create(
+            user=request.user,
+            method='manual_backup',
+            success=False,
+            metadata={'error': str(e)}
+        )
+        
+        return Response({
+            'success': False,
+            'error': f'Backup failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+print("🟢 views.py loaded successfully!")
+print(f"📋 Available views: {[name for name in dir() if name.endswith('_view') or 'login' in name or 'group' in name]}")

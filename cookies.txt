@@ -4,3 +4,4 @@
 
 #HttpOnly_localhost	FALSE	/	FALSE	1772587470	sessionid	2xsm1bv4cqaal2p3j7a77ne8eh9ibmpt
 localhost	FALSE	/	FALSE	1802827470	csrftoken	ClV0T8RsTEDEaJHurzmBbWbtyQayQhiL
+# Collaboration test by Bidisha

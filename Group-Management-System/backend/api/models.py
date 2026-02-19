@@ -68,7 +68,6 @@ class User(AbstractUser):
     otp_secret = models.CharField(max_length=100, blank=True)
     otp_created_at = models.DateTimeField(null=True, blank=True)
     
-    # Fix the conflicting fields
     groups = models.ManyToManyField(
         'auth.Group',
         related_name='custom_user_set',
@@ -86,7 +85,6 @@ class User(AbstractUser):
     )
     
     def set_backup_codes(self, codes):
-        """Hash and store backup codes"""
         hashed_codes = []
         for code in codes:
             salt = os.urandom(32).hex()
@@ -95,7 +93,6 @@ class User(AbstractUser):
         self.backup_codes = hashed_codes
         
     def verify_backup_code(self, code):
-        """Verify a backup code"""
         for stored in self.backup_codes:
             salt, hashed = stored.split('$')
             test_hash = hashlib.pbkdf2_hmac('sha256', code.encode(), salt.encode(), 100000).hex()
@@ -114,7 +111,7 @@ class Student(models.Model):
     roll_number = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=15, blank=True, null=True)  # Added phone field
+    phone = models.CharField(max_length=15, blank=True, null=True)
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -126,7 +123,7 @@ class Faculty(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='faculty_profile')
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=15, blank=True, null=True)  # Added phone field
+    phone = models.CharField(max_length=15, blank=True, null=True)
     max_groups = models.IntegerField(default=3)
     current_groups = models.IntegerField(default=0)
     is_available = models.BooleanField(default=True)
@@ -180,6 +177,7 @@ class Topic(models.Model):
         return self.name
 
 
+# ✅ SINGLE GroupSelection model with FCFS support
 class GroupSelection(models.Model):
     group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name='selection')
     faculty = models.ForeignKey(Faculty, on_delete=models.SET_NULL, null=True, related_name='groups')
@@ -188,9 +186,15 @@ class GroupSelection(models.Model):
     selected_at = models.DateTimeField(auto_now_add=True)
     is_approved = models.BooleanField(default=False)
     
+    # FCFS support with millisecond precision
+    submitted_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    class Meta:
+        ordering = ['submitted_at']  # Oldest first = FCFS
+    
     def __str__(self):
         return f"Selection for Group {self.group.group_id}"
-    
+
 
 class AdminLoginLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
@@ -250,7 +254,6 @@ class EmergencyPaperKey(models.Model):
     used_at = models.DateTimeField(null=True, blank=True)
     
     def verify_key(self, key):
-        """Verify paper key"""
         return check_password(key, self.key_hash)
     
 
@@ -263,3 +266,16 @@ class TempStudent(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.roll_number})"
+
+
+class SelectionQueue(models.Model):
+    """Tracks pending selections for FCFS"""
+    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    faculty = models.ForeignKey(Faculty, on_delete=models.CASCADE, null=True, blank=True)
+    domain = models.ForeignKey(Domain, on_delete=models.CASCADE, null=True, blank=True)
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE, null=True, blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    processed = models.BooleanField(default=False)
+    
+    class Meta:
+        ordering = ['requested_at']

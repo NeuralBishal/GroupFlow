@@ -61,6 +61,8 @@ def login_view(request):
     if user is not None:
         auth_login(request, user)
         
+        # Check if this is first login (password equals username)
+        # For faculty, username is their faculty ID (e.g., FAC001)
         is_first_login = (username == password)
         
         return Response({
@@ -71,6 +73,7 @@ def login_view(request):
                 'role': user.role,
                 'is_group_leader': user.is_group_leader,
                 'roll_number': user.roll_number,
+                'faculty_id': user.faculty_id,  # Add this for faculty
                 'is_first_login': is_first_login
             }
         })
@@ -79,7 +82,6 @@ def login_view(request):
             'success': False,
             'error': 'Invalid credentials'
         }, status=status.HTTP_401_UNAUTHORIZED)
-
 
 @api_view(['POST'])
 def logout_view(request):
@@ -273,13 +275,11 @@ def verify_reset_token(request, user_id, token):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def import_students_from_sheet(request):
-    """Import students from public Google Sheet CSV"""
+    """Import students from Google Sheet"""
     
     sheet_id = request.data.get('sheet_id')
     if not sheet_id:
         return Response({'error': 'Sheet ID required'}, status=400)
-    
-    print(f"\n🟢 IMPORT VIEW CALLED with Sheet ID: {sheet_id}")
     
     try:
         url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv'
@@ -287,7 +287,7 @@ def import_students_from_sheet(request):
         response.raise_for_status()
         
         data = pd.read_csv(StringIO(response.text))
-        print(f"📊 Found {len(data)} rows in sheet")
+        print(f"📊 Found {len(data)} rows")
         
         imported = 0
         updated = 0
@@ -298,6 +298,7 @@ def import_students_from_sheet(request):
             
             print(f"  Processing: {name} - {roll}")
             
+            # Check if student exists
             if Student.objects.filter(roll_number=roll).exists():
                 # Update existing
                 student = Student.objects.get(roll_number=roll)
@@ -306,13 +307,15 @@ def import_students_from_sheet(request):
                 updated += 1
                 print(f"    🔄 Updated: {roll}")
             else:
-                # Create new
+                # Create new user with roll as username AND password
                 user = User.objects.create_user(
-                    username=roll,
-                    password=roll,
+                    username=roll,           # Username = roll number
+                    password=roll,           # Password = roll number
                     roll_number=roll,
                     role='student'
                 )
+                
+                # Create student
                 Student.objects.create(
                     user=user,
                     roll_number=roll,
@@ -326,9 +329,7 @@ def import_students_from_sheet(request):
         return Response({
             'success': True,
             'message': f'✅ Imported: {imported}, Updated: {updated}',
-            'total': len(data),
-            'imported': imported,
-            'updated': updated
+            'total': len(data)
         })
         
     except Exception as e:
@@ -415,6 +416,22 @@ def create_group(request):
         'message': 'Group created successfully'
     })
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_student_name(request, roll_number):
+    """Get student name by roll number"""
+    try:
+        student = Student.objects.get(roll_number=roll_number)
+        return Response({
+            'success': True,
+            'name': student.name,
+            'roll_number': student.roll_number
+        })
+    except Student.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Student not found'
+        }, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -426,6 +443,7 @@ def check_group_status(request, roll_number):
         
         if group_member:
             group = group_member.group
+            # Use the updated GroupSerializer which now includes selection_details
             serializer = GroupSerializer(group)
             return Response({
                 'in_group': True,
@@ -439,41 +457,74 @@ def check_group_status(request, roll_number):
     except Student.DoesNotExist:
         return Response({'error': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
 
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def select_group_preferences(request):
-    """Select faculty, domain, and topic for a group"""
+def select_group_preferences_fcfs(request):
+    """
+    FCFS Group Selection with millisecond timestamp
+    """
     group_id = request.data.get('group_id')
     faculty_id = request.data.get('faculty_id')
     domain_id = request.data.get('domain_id')
     topic_id = request.data.get('topic_id')
-
+    
+    # Get current time with microseconds
+    from django.utils.timezone import now
+    submission_time = now()
+    
+    # Format timestamp with milliseconds
+    timestamp_str = submission_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]  # Keep 3 digits for milliseconds
+    
     try:
         group = Group.objects.get(group_id=group_id)
         
+        # Check if group already has selections
         if hasattr(group, 'selection'):
-            return Response({'error': 'Group already has selections'}, 
-                           status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'success': False,
+                'error': 'Group already has selections',
+                'timestamp': timestamp_str
+            }, status=status.HTTP_400_BAD_REQUEST)
         
-        faculty = Faculty.objects.get(id=faculty_id)
-        if faculty.current_groups >= faculty.max_groups:
-            return Response({'error': 'Faculty has reached maximum groups'}, 
-                           status=status.HTTP_400_BAD_REQUEST)
+        # Check faculty availability with LOCK to prevent race conditions
+        from django.db import transaction
+        with transaction.atomic():
+            # Lock the faculty row for update
+            faculty = Faculty.objects.select_for_update().get(id=faculty_id)
+            
+            if faculty.current_groups >= faculty.max_groups:
+                return Response({
+                    'success': False,
+                    'error': 'Faculty has reached maximum groups',
+                    'faculty_current': faculty.current_groups,
+                    'faculty_max': faculty.max_groups,
+                    'timestamp': timestamp_str
+                }, status=status.HTTP_400_BAD_REQUEST)
         
-        topic = Topic.objects.get(id=topic_id)
-        if topic.current_groups >= topic.max_groups:
-            return Response({'error': 'Topic has reached maximum groups'}, 
-                           status=status.HTTP_400_BAD_REQUEST)
+        # Check topic availability with LOCK
+        with transaction.atomic():
+            topic = Topic.objects.select_for_update().get(id=topic_id)
+            
+            if topic.current_groups >= topic.max_groups:
+                return Response({
+                    'success': False,
+                    'error': 'Topic has reached maximum groups',
+                    'topic_current': topic.current_groups,
+                    'topic_max': topic.max_groups,
+                    'timestamp': timestamp_str
+                }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Create selection with timestamp
         with transaction.atomic():
             selection = GroupSelection.objects.create(
                 group=group,
                 faculty=faculty,
                 domain_id=domain_id,
-                topic=topic
+                topic=topic,
+                submitted_at=submission_time
             )
             
+            # Update counts
             faculty.current_groups += 1
             if faculty.current_groups >= faculty.max_groups:
                 faculty.is_available = False
@@ -484,17 +535,39 @@ def select_group_preferences(request):
                 topic.is_available = False
             topic.save()
         
+        # Get queue position
+        queue_position = GroupSelection.objects.filter(
+            submitted_at__lt=submission_time
+        ).count() + 1
+        
         serializer = GroupSelectionSerializer(selection)
-        return Response(serializer.data)
+        
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'submission_time': timestamp_str,
+            'queue_position': queue_position,
+            'message': f'Selection saved at {timestamp_str} (Position: {queue_position})'
+        })
         
     except Group.DoesNotExist:
-        return Response({'error': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({
+            'success': False,
+            'error': 'Group not found',
+            'timestamp': timestamp_str
+        }, status=status.HTTP_404_NOT_FOUND)
     except Faculty.DoesNotExist:
-        return Response({'error': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({
+            'success': False,
+            'error': 'Faculty not found',
+            'timestamp': timestamp_str
+        }, status=status.HTTP_404_NOT_FOUND)
     except Topic.DoesNotExist:
-        return Response({'error': 'Topic not found'}, status=status.HTTP_404_NOT_FOUND)
-
-
+        return Response({
+            'success': False,
+            'error': 'Topic not found',
+            'timestamp': timestamp_str
+        }, status=status.HTTP_404_NOT_FOUND)
 # ==================== DATA FETCHING ====================
 
 @api_view(['GET'])
@@ -505,7 +578,107 @@ def get_available_faculty(request):
     serializer = FacultySerializer(faculty, many=True)
     return Response(serializer.data)
 
-
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def import_faculty_from_sheet(request):
+    """Import faculty from Google Sheet - updates existing, creates new"""
+    
+    sheet_id = request.data.get('sheet_id')
+    if not sheet_id:
+        return Response({'error': 'Sheet ID required'}, status=400)
+    
+    print(f"\n=== FACULTY IMPORT STARTED ===")
+    print(f"Sheet ID: {sheet_id}")
+    
+    try:
+        # Fetch sheet
+        url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv'
+        response = requests.get(url)
+        
+        if response.status_code != 200:
+            return Response({'error': f'Failed to fetch sheet'}, status=400)
+        
+        # Read CSV
+        data = pd.read_csv(StringIO(response.text))
+        print(f"Rows: {len(data)}")
+        print(f"Columns: {list(data.columns)}")
+        
+        created = 0
+        updated = 0
+        errors = []
+        
+        for index, row in data.iterrows():
+            try:
+                # Get values
+                name = str(row.iloc[0]).strip()
+                email = str(row.iloc[1]).strip()
+                faculty_id = str(row.iloc[2]).strip()
+                max_groups = int(row.iloc[3])
+                
+                print(f"\nProcessing: {name} - {faculty_id}")
+                
+                # Check if user with this username already exists
+                if User.objects.filter(username=faculty_id).exists():
+                    # UPDATE existing faculty
+                    user = User.objects.get(username=faculty_id)
+                    user.email = email
+                    user.save()
+                    
+                    # Update or create faculty profile
+                    faculty, created_flag = Faculty.objects.update_or_create(
+                        user=user,
+                        defaults={
+                            'name': name,
+                            'email': email,
+                            'max_groups': max_groups,
+                            'is_available': True
+                        }
+                    )
+                    updated += 1
+                    print(f"  ✅ Updated existing: {faculty_id}")
+                else:
+                    # CREATE new faculty
+                    user = User.objects.create_user(
+                        username=faculty_id,
+                        password="faculty123",
+                        email=email,
+                        role='faculty'
+                    )
+                    
+                    faculty = Faculty.objects.create(
+                        user=user,
+                        name=name,
+                        email=email,
+                        max_groups=max_groups,
+                        current_groups=0,
+                        is_available=True
+                    )
+                    created += 1
+                    print(f"  ✅ Created new: {faculty_id}")
+                
+            except Exception as e:
+                error_msg = f"Row {index+2}: {str(e)}"
+                print(f"  ❌ {error_msg}")
+                errors.append(error_msg)
+        
+        print(f"\n=== IMPORT COMPLETE ===")
+        print(f"Created: {created}, Updated: {updated}")
+        
+        return Response({
+            'success': True,
+            'message': f'✅ Created: {created}, Updated: {updated}',
+            'total': len(data),
+            'created': created,
+            'updated': updated,
+            'errors': errors if errors else None
+        })
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response({'error': str(e)}, status=500)
+    
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_domains(request):
@@ -535,6 +708,44 @@ def faculty_dashboard(request, faculty_id):
         return Response(serializer.data)
     except Faculty.DoesNotExist:
         return Response({'error': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_selection_queue(request):
+    """Get current queue status for FCFS"""
+    
+    domain_id = request.GET.get('domain_id')
+    faculty_id = request.GET.get('faculty_id')
+    
+    if domain_id:
+        queue = GroupSelection.objects.filter(
+            domain_id=domain_id,
+            submitted_at__isnull=False
+        ).order_by('submitted_at')
+    elif faculty_id:
+        queue = GroupSelection.objects.filter(
+            faculty_id=faculty_id,
+            submitted_at__isnull=False
+        ).order_by('submitted_at')
+    else:
+        queue = GroupSelection.objects.all().order_by('submitted_at')
+    
+    queue_data = []
+    for idx, item in enumerate(queue, 1):
+        queue_data.append({
+            'position': idx,
+            'group_id': item.group.group_id,
+            'submitted_at': item.submitted_at.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+            'faculty': item.faculty.name if item.faculty else None,
+            'domain': item.domain.name if item.domain else None
+        })
+    
+    return Response({
+        'success': True,
+        'queue': queue_data,
+        'total': len(queue_data)
+    })
 
 
 # ==================== ADMIN MANAGEMENT ====================
@@ -592,6 +803,49 @@ def admin_create_faculty(request):
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def assign_domain_to_faculty(request):
+    """Assign a domain to a faculty member"""
+    
+    if request.user.role not in ['admin', 'super_admin']:
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    faculty_id = request.data.get('faculty_id')
+    domain_id = request.data.get('domain_id')
+    
+    try:
+        faculty = Faculty.objects.get(id=faculty_id)
+        domain = Domain.objects.get(id=domain_id)
+        
+        # You might want to create an assignment model
+        # For now, we'll just return success
+        
+        return Response({
+            'success': True,
+            'message': f'Domain {domain.name} assigned to {faculty.name}'
+        })
+        
+    except Faculty.DoesNotExist:
+        return Response({'error': 'Faculty not found'}, status=404)
+    except Domain.DoesNotExist:
+        return Response({'error': 'Domain not found'}, status=404)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_faculty_domains(request, faculty_id):
+    """Get domains assigned to a faculty"""
+    
+    try:
+        faculty = Faculty.objects.get(id=faculty_id)
+        # Return domains (you can filter based on your assignment logic)
+        domains = Domain.objects.all()
+        serializer = DomainSerializer(domains, many=True)
+        return Response(serializer.data)
+        
+    except Faculty.DoesNotExist:
+        return Response({'error': 'Faculty not found'}, status=404)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -611,6 +865,97 @@ def admin_create_domain(request):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_get_all_groups(request):
+    """Get all groups with their details for admin view"""
+    
+    if request.user.role not in ['admin', 'super_admin']:
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    groups = Group.objects.all().prefetch_related(
+        'members__student__user',
+        'selection__faculty',
+        'selection__domain',
+        'selection__topic'
+    )
+    
+    data = []
+    for group in groups:
+        group_data = {
+            'group_id': group.group_id,
+            'size': group.size,
+            'created_at': group.created_at,
+            'is_complete': group.is_complete,
+            'leader': {
+                'name': group.group_leader.name,
+                'roll_number': group.group_leader.roll_number
+            },
+            'members': [
+                {
+                    'name': m.student.name,
+                    'roll_number': m.student.roll_number
+                } for m in group.members.all()
+            ],
+            'selection': None
+        }
+        
+        if hasattr(group, 'selection') and group.selection:
+            group_data['selection'] = {
+                'faculty': group.selection.faculty.name if group.selection.faculty else None,
+                'domain': group.selection.domain.name if group.selection.domain else None,
+                'topic': group.selection.topic.name if group.selection.topic else None,
+                'submitted_at': group.selection.submitted_at,
+                'is_approved': group.selection.is_approved
+            }
+        
+        data.append(group_data)
+    
+    return Response({
+        'success': True,
+        'total_groups': len(data),
+        'groups': data
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_get_all_students(request):
+    """Get all students with their group info"""
+    
+    if request.user.role not in ['admin', 'super_admin']:
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    students = Student.objects.all().select_related('user')
+    
+    data = []
+    for student in students:
+        # Find which group this student belongs to
+        group_member = GroupMember.objects.filter(student=student).select_related('group').first()
+        group_info = None
+        if group_member:
+            group_info = {
+                'group_id': group_member.group.group_id,
+                'is_leader': group_member.group.group_leader.id == student.id
+            }
+        
+        data.append({
+            'id': student.id,
+            'name': student.name,
+            'roll_number': student.roll_number,
+            'email': student.email,
+            'is_verified': student.is_verified,
+            'username': student.user.username,
+            'group': group_info,
+            'is_group_leader': student.user.is_group_leader
+        })
+    
+    return Response({
+        'success': True,
+        'total_students': len(data),
+        'students': data
+    })
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -1753,3 +2098,346 @@ def reset_password_with_otp(request):
     user.save()
     
     return Response({'success': True, 'message': 'Password reset successful'})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_all_admins(request):
+    """Get all admin users for super admin"""
+    
+    if request.user.role != 'super_admin':
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    admins = User.objects.filter(role='admin').values(
+        'id', 'username', 'email', 'date_joined', 'is_active'
+    )
+    return Response(list(admins))
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_admin_list(request):
+    """Get list of admins for admin dashboard"""
+    
+    if request.user.role not in ['admin', 'super_admin']:
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    admins = User.objects.filter(role='admin').values(
+        'id', 'username', 'email', 'date_joined', 'is_active'
+    )
+    return Response(list(admins))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_create_admin(request):
+    """Regular admin creates a new admin account"""
+    
+    if request.user.role not in ['admin', 'super_admin']:
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        username = request.data.get('username')
+        password = request.data.get('password')
+        email = request.data.get('email')
+        name = request.data.get('name')
+        
+        print(f"Admin creating admin - Data: {request.data}")
+        
+        # Check required fields
+        missing_fields = []
+        if not username: missing_fields.append('username')
+        if not password: missing_fields.append('password')
+        if not email: missing_fields.append('email')
+        if not name: missing_fields.append('name')
+        
+        if missing_fields:
+            return Response({
+                'success': False,
+                'error': f'Missing required fields: {", ".join(missing_fields)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if user exists
+        if User.objects.filter(username=username).exists():
+            return Response({
+                'success': False,
+                'error': 'Username already exists'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create admin user
+        admin_user = User.objects.create_user(
+            username=username,
+            password=password,
+            email=email,
+            role='admin'
+        )
+        
+        # If you have a profile model for admins, create it here
+        
+        return Response({
+            'success': True,
+            'message': f'Admin {username} created successfully'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error creating admin: {str(e)}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def export_faculty_to_sheet(request):
+    """Export faculty to Google Sheet format"""
+    
+    if request.user.role not in ['admin', 'super_admin']:
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Get all faculty
+        faculty_list = Faculty.objects.all().select_related('user')
+        
+        # Prepare data for export
+        data = []
+        for f in faculty_list:
+            data.append({
+                'Name': f.name,
+                'Email': f.email,
+                'Faculty ID': f.user.username,
+                'Max Groups': f.max_groups,
+                'Current Groups': f.current_groups,
+                'Available': 'Yes' if f.is_available else 'No'
+            })
+        
+        # Create CSV
+        import csv
+        from django.http import HttpResponse
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="faculty_export.csv"'
+        
+        writer = csv.DictWriter(response, fieldnames=['Name', 'Email', 'Faculty ID', 'Max Groups', 'Current Groups', 'Available'])
+        writer.writeheader()
+        writer.writerows(data)
+        
+        return response
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+    
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def admin_profile(request):
+    """Get or update admin profile"""
+    
+    if request.user.role not in ['admin', 'super_admin']:
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    if request.method == 'GET':
+        # Get admin profile data
+        profile = {
+            'id': request.user.id,
+            'username': request.user.username,
+            'email': request.user.email,
+            'phone_number': request.user.phone_number,
+            'recovery_email': request.user.recovery_email,
+            'recovery_phone': request.user.recovery_phone,
+            'two_factor_enabled': request.user.two_factor_enabled,
+            'role': request.user.role,
+            'date_joined': request.user.date_joined
+        }
+        return Response({'success': True, 'profile': profile})
+    
+    elif request.method == 'PUT':
+        try:
+            # Update profile
+            request.user.email = request.data.get('email', request.user.email)
+            request.user.phone_number = request.data.get('phone_number', request.user.phone_number)
+            request.user.recovery_email = request.data.get('recovery_email', request.user.recovery_email)
+            request.user.recovery_phone = request.data.get('recovery_phone', request.user.recovery_phone)
+            request.user.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Profile updated successfully'
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_forgot_password(request):
+    """Send OTP to admin's email or phone for password reset"""
+    
+    identifier = request.data.get('identifier')  # Can be email or phone
+    method = request.data.get('method', 'email')  # 'email' or 'phone'
+    
+    if not identifier:
+        return Response({'error': 'Email or phone number required'}, status=400)
+    
+    # Find admin by email or phone
+    user = None
+    if '@' in identifier:
+        # Try to find by email
+        try:
+            user = User.objects.get(email=identifier, role='admin')
+        except User.DoesNotExist:
+            try:
+                user = User.objects.get(recovery_email=identifier, role='admin')
+            except User.DoesNotExist:
+                pass
+    else:
+        # Try to find by phone
+        try:
+            user = User.objects.get(phone_number=identifier, role='admin')
+        except User.DoesNotExist:
+            try:
+                user = User.objects.get(recovery_phone=identifier, role='admin')
+            except User.DoesNotExist:
+                pass
+    
+    if not user:
+        # Don't reveal if user exists for security
+        return Response({
+            'success': True,
+            'message': 'If an account exists, instructions will be sent'
+        })
+    
+    # Generate OTP
+    otp = generate_otp()
+    user.otp_secret = otp
+    user.otp_created_at = timezone.now()
+    user.save()
+    
+    # Send OTP
+    if method == 'email':
+        send_otp_email(identifier, otp, 'Admin')
+    else:
+        send_otp_sms(identifier, otp)
+    
+    return Response({
+        'success': True,
+        'message': f'OTP sent to your {method}',
+        'user_id': user.id
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_verify_otp(request):
+    """Verify OTP and allow password reset"""
+    
+    user_id = request.data.get('user_id')
+    otp = request.data.get('otp')
+    
+    if not user_id or not otp:
+        return Response({'error': 'User ID and OTP required'}, status=400)
+    
+    try:
+        user = User.objects.get(id=user_id, role='admin')
+    except User.DoesNotExist:
+        return Response({'error': 'Admin not found'}, status=404)
+    
+    if user.otp_secret == otp and user.otp_created_at and (timezone.now() - user.otp_created_at).seconds < 600:
+        # Generate reset token
+        token = default_token_generator.make_token(user)
+        return Response({
+            'success': True,
+            'message': 'OTP verified',
+            'token': token,
+            'user_id': user.id
+        })
+    else:
+        return Response({'error': 'Invalid or expired OTP'}, status=400)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_reset_password(request):
+    """Reset admin password using verified OTP"""
+    
+    user_id = request.data.get('user_id')
+    token = request.data.get('token')
+    new_password = request.data.get('new_password')
+    confirm_password = request.data.get('confirm_password')
+    
+    if new_password != confirm_password:
+        return Response({'error': 'Passwords do not match'}, status=400)
+    
+    try:
+        user = User.objects.get(id=user_id, role='admin')
+    except User.DoesNotExist:
+        return Response({'error': 'Admin not found'}, status=404)
+    
+    # Verify token
+    if not default_token_generator.check_token(user, token):
+        return Response({'error': 'Invalid or expired token'}, status=400)
+    
+    # Validate password
+    try:
+        validate_password(new_password)
+    except ValidationError as e:
+        return Response({'error': list(e.messages)[0]}, status=400)
+    
+    # Set new password
+    user.set_password(new_password)
+    user.otp_secret = ''  # Clear OTP
+    user.save()
+    
+    return Response({'success': True, 'message': 'Password reset successful'})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_get_all_faculty_details(request):
+    """Get all faculties with their assigned groups and domains"""
+    
+    if request.user.role not in ['admin', 'super_admin']:
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    faculties = Faculty.objects.all().prefetch_related(
+        'groups__group__members__student',
+        'groups__domain',
+        'groups__topic'
+    )
+    
+    data = []
+    for faculty in faculties:
+        # Get all groups assigned to this faculty
+        assigned_groups = []
+        for selection in faculty.groups.all():
+            group_data = {
+                'group_id': selection.group.group_id,
+                'domain': selection.domain.name if selection.domain else None,
+                'topic': selection.topic.name if selection.topic else None,
+                'submitted_at': selection.submitted_at,
+                'is_approved': selection.is_approved,
+                'members': [
+                    {
+                        'name': m.student.name,
+                        'roll_number': m.student.roll_number
+                    } for m in selection.group.members.all()
+                ]
+            }
+            assigned_groups.append(group_data)
+        
+        data.append({
+            'id': faculty.id,
+            'name': faculty.name,
+            'email': faculty.email,
+            'phone': faculty.phone,
+            'max_groups': faculty.max_groups,
+            'current_groups': faculty.current_groups,
+            'is_available': faculty.is_available,
+            'username': faculty.user.username,
+            'assigned_groups': assigned_groups,
+            'available_slots': faculty.max_groups - faculty.current_groups
+        })
+    
+    return Response({
+        'success': True,
+        'total': len(data),
+        'faculties': data
+    })

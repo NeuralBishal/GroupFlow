@@ -20,12 +20,29 @@ class GroupMemberSerializer(serializers.ModelSerializer):
 
 class GroupSerializer(serializers.ModelSerializer):
     group_leader_details = StudentSerializer(source='group_leader', read_only=True)
-    members = GroupMemberSerializer(source='groupmember_set', many=True, read_only=True)
+    members = serializers.SerializerMethodField()
+    selection_info = serializers.SerializerMethodField()
     
     class Meta:
         model = Group
-        fields = ['id', 'group_id', 'group_leader', 'group_leader_details', 'size', 'created_at', 'is_complete', 'members']
-
+        fields = ['id', 'group_id', 'group_leader', 'group_leader_details', 
+                  'size', 'created_at', 'is_complete', 'members', 'selection', 'selection_info']
+    
+    def get_members(self, obj):
+        members = GroupMember.objects.filter(group=obj).select_related('student__user')
+        return GroupMemberSerializer(members, many=True).data
+    
+    def get_selection_info(self, obj):
+        if hasattr(obj, 'selection') and obj.selection:
+            selection = obj.selection
+            return {
+                'faculty_name': selection.faculty.name if selection.faculty else None,
+                'domain_name': selection.domain.name if selection.domain else None,
+                'topic_name': selection.topic.name if selection.topic else None,
+                'submitted_at': selection.submitted_at,
+            }
+        return None
+    
 class DomainSerializer(serializers.ModelSerializer):
     class Meta:
         model = Domain

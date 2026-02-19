@@ -16,7 +16,7 @@ urlpatterns = [
     # Group Management
     path('create-group/', views.create_group, name='create_group'),
     path('check-group-status/<str:roll_number>/', views.check_group_status, name='check_group_status'),
-    path('select-preferences/', views.select_group_preferences, name='select_preferences'),
+    path('get-student-name/<str:roll_number>/', views.get_student_name, name='get_student_name'),
     
     # Data Fetching
     path('available-faculty/', views.get_available_faculty, name='available_faculty'),
@@ -31,10 +31,22 @@ urlpatterns = [
     path('admin/create-topic/<int:domain_id>/', views.admin_create_topic, name='admin_create_topic'),
     path('admin/delete-domain/<int:domain_id>/', views.admin_delete_domain, name='admin_delete_domain'),
     path('admin/delete-topic/<int:topic_id>/', views.admin_delete_topic, name='admin_delete_topic'),
+    path('admin/list/', views.get_admin_list, name='admin_list'),
+    path('admin/create-admin/', views.admin_create_admin, name='admin_create_admin'),
+    path('admin/all-groups/', views.admin_get_all_groups, name='admin_all_groups'),
+    path('admin/all-students/', views.admin_get_all_students, name='admin_all_students'),
+
+    # Admin Profile & Recovery
+    path('admin/profile/', views.admin_profile, name='admin_profile'),
+    path('admin/forgot-password/', views.admin_forgot_password, name='admin_forgot_password'),
+    path('admin/verify-otp/', views.admin_verify_otp, name='admin_verify_otp'),
+    path('admin/reset-password/', views.admin_reset_password, name='admin_reset_password'),
+    path('admin/faculty-details/', views.admin_get_all_faculty_details, name='admin_faculty_details'),
     
     # Super Admin Authentication
     path('super-admin/login/', views.super_admin_login_view, name='super_admin_login'),
     path('super-admin/dashboard-stats/', views.super_admin_dashboard_stats, name='super_admin_dashboard_stats'),
+    path('super-admin/admins/', views.get_all_admins, name='super_admin_admins'),
     
     # Biometric Authentication
     path('super-admin/register-biometric/', views.register_biometric, name='register_biometric'),
@@ -43,7 +55,7 @@ urlpatterns = [
     path('super-admin/verify-biometric-login/', views.verify_biometric_login, name='verify_biometric_login'),
     path('super-admin/list-biometrics/', views.list_biometrics, name='list_biometrics'),
     path('super-admin/create-admin/', views.super_admin_create_admin, name='super_admin_create_admin'),
-    
+
     # Paper Keys Management
     path('super-admin/paper-keys/', views.get_paper_keys, name='get_paper_keys'),
     path('super-admin/generate-paper-keys/', views.generate_paper_keys, name='generate_paper_keys'),
@@ -57,14 +69,24 @@ urlpatterns = [
     path('super-admin/test-email/', views.test_email, name='test_email'),
     path('super-admin/backup/', views.manual_backup, name='manual_backup'),
 
-    #sheets
+    # Sheets Import
     path('import-students/', views.import_students_from_sheet, name='import_students'),
+    path('import-faculty/', views.import_faculty_from_sheet, name='import_faculty'),
 
-    #passwordchangefirst
+    # Password Change
     path('change-password/', views.change_password, name='change_password'),
 
-    #authentication mobile 
+    # Mobile Authentication 
     path('request-password-reset/', views.request_password_reset, name='request_password_reset'),
     path('verify-reset-otp/', views.verify_reset_otp, name='verify_reset_otp'),
     path('reset-password-with-otp/', views.reset_password_with_otp, name='reset_password_with_otp'),    
+
+    # FCFS System
+    path('select-fcfs/', views.select_group_preferences_fcfs, name='select_fcfs'),
+    path('selection-queue/', views.get_selection_queue, name='selection_queue'),
+
+    # Faculty Management
+    path('faculty/export/', views.export_faculty_to_sheet, name='export_faculty'),
+    path('faculty/<int:faculty_id>/domains/', views.get_faculty_domains, name='faculty_domains'),
+    path('faculty/assign-domain/', views.assign_domain_to_faculty, name='assign_domain'),
 ]

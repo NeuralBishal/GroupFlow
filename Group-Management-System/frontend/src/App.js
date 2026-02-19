@@ -54,7 +54,7 @@ import ResetPassword from './components/ResetPassword';
 import PasswordReset from './components/PasswordReset';
 
 // Set up axios
-axios.defaults.baseURL = 'http://localhost:8000/api';
+axios.defaults.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 axios.defaults.withCredentials = true;
 
 // CSRF Token Interceptor

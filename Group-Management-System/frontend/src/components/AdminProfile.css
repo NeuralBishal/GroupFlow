@@ -1,0 +1,188 @@
+.profile-card {
+  transition: all 0.3s ease;
+  border: none;
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.profile-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 40px rgba(0,123,255,0.2);
+}
+
+.profile-card .card-header {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  border-bottom: none;
+  padding: 1.5rem;
+}
+
+.profile-card .card-header h4 {
+  margin: 0;
+  font-weight: 600;
+}
+
+.profile-card .nav-tabs {
+  border-bottom: 2px solid #dee2e6;
+}
+
+.profile-card .nav-tabs .nav-link {
+  border: none;
+  color: #6c757d;
+  font-weight: 500;
+  padding: 1rem 2rem;
+  transition: all 0.3s ease;
+}
+
+.profile-card .nav-tabs .nav-link:hover {
+  color: #007bff;
+  background-color: transparent;
+  transform: translateY(-2px);
+}
+
+.profile-card .nav-tabs .nav-link.active {
+  color: #007bff;
+  background-color: transparent;
+  border-bottom: 3px solid #007bff;
+}
+
+.profile-card .tab-content {
+  padding: 2rem;
+}
+
+.profile-card .form-control {
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  transition: all 0.3s ease;
+}
+
+.profile-card .form-control:focus {
+  transform: scale(1.01);
+  box-shadow: 0 5px 15px rgba(0,123,255,0.2);
+}
+
+.profile-card .input-group-text {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px 0 0 10px;
+}
+
+.profile-card .btn {
+  border-radius: 10px;
+  padding: 0.75rem 2rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.profile-card .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.profile-card .btn:active {
+  transform: translateY(0);
+}
+
+.profile-card .btn-primary {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  border: none;
+}
+
+.profile-card .btn-warning {
+  background: linear-gradient(135deg, #ffc107, #ff9800);
+  border: none;
+  color: white;
+}
+
+.profile-card h5 {
+  color: #495057;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  position: relative;
+  padding-bottom: 0.5rem;
+}
+
+.profile-card h5:after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 50px;
+  height: 3px;
+  background: linear-gradient(90deg, #007bff, #00ff88);
+  border-radius: 3px;
+}
+
+.profile-card .text-muted {
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tab-pane {
+  animation: slideIn 0.3s ease;
+}
+
+.profile-card .spinner-border {
+  width: 3rem;
+  height: 3rem;
+  color: #007bff;
+}
+
+.profile-card .alert {
+  border-radius: 10px;
+  animation: slideIn 0.3s ease;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .profile-card .tab-content {
+    padding: 1rem;
+  }
+  
+  .profile-card .nav-tabs .nav-link {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .profile-card .btn {
+    width: 100%;
+  }
+}
+
+/* Hover effects for inputs */
+.profile-card .input-group:hover .input-group-text {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+.profile-card .input-group:hover .form-control {
+  border-color: #764ba2;
+}
+
+/* Success animation */
+@keyframes checkmark {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.profile-card .alert-success {
+  animation: checkmark 0.5s ease;
+}

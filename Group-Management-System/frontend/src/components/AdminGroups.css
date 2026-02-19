@@ -1,0 +1,218 @@
+/* Hover Effects for All Components */
+
+.dashboard-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2) !important;
+}
+
+.icon-hover {
+  transition: transform 0.3s ease, color 0.3s ease;
+}
+
+.icon-hover:hover {
+  transform: scale(1.2) rotate(5deg);
+  color: #ffd700 !important;
+}
+
+.group-card {
+  transition: all 0.3s ease;
+  border-left: 4px solid transparent;
+}
+
+.group-card:hover {
+  transform: translateX(5px);
+  border-left-color: #007bff;
+  box-shadow: 0 5px 15px rgba(0,123,255,0.2);
+}
+
+.search-box {
+  position: relative;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6c757d;
+  z-index: 10;
+  transition: color 0.3s ease;
+}
+
+.search-input {
+  padding-left: 35px;
+  transition: all 0.3s ease;
+}
+
+.search-input:focus {
+  transform: scale(1.02);
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+}
+
+.search-input:focus + .search-icon {
+  color: #007bff;
+}
+
+.filter-select {
+  transition: all 0.3s ease;
+}
+
+.filter-select:hover {
+  transform: translateY(-2px);
+  border-color: #007bff;
+}
+
+.stats-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.stats-badge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 5px 15px rgba(102,126,234,0.4);
+}
+
+.leader-info {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.leader-info:hover {
+  transform: scale(1.02);
+  box-shadow: 0 5px 15px rgba(245,87,108,0.3);
+}
+
+.member-item {
+  transition: all 0.2s ease;
+  border-radius: 4px;
+}
+
+.member-item:hover {
+  background-color: #f8f9fa;
+  transform: translateX(5px);
+  padding-left: 15px !important;
+}
+
+.selection-info {
+  transition: all 0.3s ease;
+}
+
+.selection-info:hover {
+  background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%) !important;
+  color: white;
+  transform: scale(1.02);
+}
+
+.badge {
+  transition: all 0.3s ease;
+}
+
+.badge:hover {
+  transform: scale(1.1);
+  filter: brightness(1.2);
+}
+
+/* Student Table Hover Effects */
+.student-row {
+  transition: all 0.3s ease;
+}
+
+.student-row:hover {
+  background-color: #f8f9fa !important;
+  transform: scale(1.01);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.student-row td {
+  transition: all 0.3s ease;
+}
+
+.student-row:hover td {
+  color: #007bff;
+}
+
+.group-badge {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.group-badge:hover {
+  transform: scale(1.1);
+  background-color: #0056b3 !important;
+}
+
+/* Loading Spinner Animation */
+.spinner-border {
+  animation: spinner-grow 1.5s linear infinite;
+}
+
+@keyframes spinner-grow {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+/* Card Header Hover */
+.card-header {
+  transition: all 0.3s ease;
+}
+
+.card-header:hover {
+  filter: brightness(1.1);
+}
+
+/* Table Header Hover */
+thead tr:hover {
+  background-color: #e9ecef !important;
+}
+
+/* Button Hover Effects */
+.btn {
+  transition: all 0.3s ease !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+/* Pulse Animation for Primary Buttons */
+.btn-primary {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0,123,255,0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(0,123,255,0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0,123,255,0);
+  }
+}

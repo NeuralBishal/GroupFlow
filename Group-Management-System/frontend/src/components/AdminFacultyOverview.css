@@ -1,0 +1,118 @@
+.faculty-overview-card {
+  transition: all 0.3s ease;
+  border: none;
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.faculty-overview-card .card-header {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  border-bottom: none;
+  padding: 1.5rem;
+}
+
+.faculty-overview-card .card-header h4 {
+  margin: 0;
+  font-weight: 600;
+}
+
+.faculty-item {
+  transition: all 0.3s ease;
+  border-left: 4px solid transparent;
+}
+
+.faculty-item:hover {
+  transform: translateX(5px);
+  border-left-color: #007bff;
+  box-shadow: 0 5px 15px rgba(0,123,255,0.2);
+}
+
+.faculty-item .card-header {
+  background-color: #f8f9fa;
+  transition: all 0.3s ease;
+}
+
+.faculty-item .card-header:hover {
+  background-color: #e9ecef;
+}
+
+.search-box {
+  border-radius: 25px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.search-box:hover {
+  border-color: #007bff;
+  box-shadow: 0 5px 15px rgba(0,123,255,0.2);
+}
+
+.search-box .input-group-text {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+}
+
+.stats-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 25px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.stats-badge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 20px rgba(102,126,234,0.5);
+}
+
+.badge {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.badge:hover {
+  transform: scale(1.1);
+  filter: brightness(1.2);
+}
+
+.assigned-groups {
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.table {
+  margin-bottom: 0;
+}
+
+.table th {
+  background-color: #f8f9fa;
+  border-top: none;
+}
+
+.table td {
+  vertical-align: middle;
+}
+
+.btn-link {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.btn-link:hover {
+  color: #0056b3;
+  text-decoration: underline;
+}

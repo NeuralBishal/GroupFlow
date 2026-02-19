@@ -5,3 +5,10 @@ Group-Management-System/frontend/.git/
 Group-Management-System/frontend/._*
 Group-Management-System/frontend/build/
 Group-Management-System/frontend/dist/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python

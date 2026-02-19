@@ -1,0 +1,355 @@
+/* Hover Effects for Admin Students Component */
+
+.dashboard-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border: none;
+  border-radius: 15px;
+  overflow: hidden;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 35px rgba(0,0,0,0.2) !important;
+}
+
+.icon-hover {
+  transition: transform 0.3s ease, color 0.3s ease;
+  cursor: pointer;
+}
+
+.icon-hover:hover {
+  transform: scale(1.2) rotate(5deg);
+  color: #ffd700 !important;
+}
+
+.student-row {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.student-row:hover {
+  background-color: #f0f8ff !important;
+  transform: scale(1.01);
+  box-shadow: 0 2px 8px rgba(0,123,255,0.2);
+}
+
+.student-row td {
+  transition: all 0.3s ease;
+  padding: 12px !important;
+}
+
+.student-row:hover td {
+  color: #0056b3;
+}
+
+.student-row td:first-child {
+  font-weight: bold;
+  color: #6c757d;
+}
+
+.student-row:hover td:first-child {
+  color: #007bff;
+}
+
+/* Badge hover effects */
+.badge {
+  transition: all 0.3s ease;
+  cursor: pointer;
+  padding: 8px 12px !important;
+  font-weight: 500;
+}
+
+.badge:hover {
+  transform: scale(1.1);
+  filter: brightness(1.2);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.bg-success:hover {
+  background-color: #28a745 !important;
+}
+
+.bg-warning:hover {
+  background-color: #ffc107 !important;
+  color: #000 !important;
+}
+
+.bg-info:hover {
+  background-color: #17a2b8 !important;
+}
+
+.bg-secondary:hover {
+  background-color: #6c757d !important;
+}
+
+.bg-primary:hover {
+  background-color: #007bff !important;
+}
+
+/* Search group hover effects */
+.search-group {
+  transition: all 0.3s ease;
+  border-radius: 25px;
+  overflow: hidden;
+  border: 2px solid transparent;
+}
+
+.search-group:hover {
+  border-color: #007bff;
+  box-shadow: 0 5px 15px rgba(0,123,255,0.2);
+}
+
+.search-group .input-group-text {
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.search-group:hover .input-group-text {
+  background-color: #007bff !important;
+  color: white !important;
+}
+
+.search-group .form-control {
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.search-group:hover .form-control {
+  background-color: #f8f9fa;
+}
+
+/* Filter select hover effects */
+.input-group {
+  transition: all 0.3s ease;
+  border-radius: 25px;
+  overflow: hidden;
+  border: 2px solid transparent;
+}
+
+.input-group:hover {
+  border-color: #28a745;
+  box-shadow: 0 5px 15px rgba(40,167,69,0.2);
+}
+
+.input-group .input-group-text {
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.input-group:hover .input-group-text {
+  background-color: #28a745 !important;
+  color: white !important;
+}
+
+.input-group .form-select {
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.input-group:hover .form-select {
+  background-color: #f8f9fa;
+}
+
+/* Stats badge hover */
+.stats-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 25px;
+  text-align: center;
+  transition: all 0.3s ease;
+  display: inline-block;
+  font-size: 1.1rem;
+  box-shadow: 0 3px 10px rgba(102,126,234,0.3);
+}
+
+.stats-badge:hover {
+  transform: scale(1.05) translateY(-2px);
+  box-shadow: 0 8px 20px rgba(102,126,234,0.5);
+}
+
+/* Table header hover */
+thead tr {
+  transition: all 0.3s ease;
+}
+
+thead tr:hover {
+  background-color: #e9ecef !important;
+}
+
+thead th {
+  transition: all 0.3s ease;
+  padding: 15px !important;
+  font-weight: 600;
+  color: #495057;
+}
+
+thead th:hover {
+  color: #007bff;
+  background-color: #dee2e6;
+}
+
+/* Table container hover */
+.students-table-container {
+  border-radius: 15px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+}
+
+.students-table-container:hover {
+  box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+}
+
+/* Table styles */
+.table {
+  margin-bottom: 0;
+  background-color: white;
+}
+
+.table th {
+  border-top: none;
+  background-color: #f8f9fa;
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinner-border {
+  animation: spin 1s linear infinite;
+}
+
+/* Group badge hover */
+.group-badge {
+  transition: all 0.3s ease;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 6px 12px !important;
+}
+
+.group-badge:hover {
+  transform: scale(1.1);
+  background-color: #0056b3 !important;
+  box-shadow: 0 3px 10px rgba(0,86,179,0.4);
+}
+
+/* Card header gradient animation */
+.card-header.bg-success {
+  background: linear-gradient(135deg, #28a745, #20c997) !important;
+  transition: all 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.card-header.bg-success::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.card-header.bg-success:hover::before {
+  left: 100%;
+}
+
+.card-header.bg-success:hover {
+  filter: brightness(1.1);
+}
+
+/* Alert hover effect */
+.alert {
+  transition: all 0.3s ease;
+  border-left: 4px solid transparent;
+}
+
+.alert:hover {
+  transform: translateX(5px);
+  border-left-color: #dc3545;
+  box-shadow: 0 5px 15px rgba(220,53,69,0.1);
+}
+
+.alert-info:hover {
+  border-left-color: #17a2b8;
+}
+
+/* Verified/Unverified badges specific */
+.badge.bg-success .bi-check-circle,
+.badge.bg-warning .bi-x-circle {
+  transition: transform 0.3s ease;
+}
+
+.badge:hover .bi-check-circle,
+.badge:hover .bi-x-circle {
+  transform: scale(1.2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .stats-badge {
+    float: none !important;
+    margin-top: 10px;
+    display: inline-block;
+  }
+  
+  .student-row:hover {
+    transform: scale(1.005);
+  }
+  
+  .badge {
+    margin: 2px;
+  }
+}
+
+/* Custom scrollbar for table */
+.students-table-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.students-table-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.students-table-container::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
+}
+
+.students-table-container::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+/* Table row click animation */
+@keyframes rowPulse {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(0,123,255,0.1); }
+  100% { background-color: transparent; }
+}
+
+.student-row:active {
+  animation: rowPulse 0.3s ease;
+}
+
+/* Empty state animation */
+.alert-info {
+  animation: fadeInUp 0.5s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

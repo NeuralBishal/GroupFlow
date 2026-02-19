@@ -1,3 +1,5 @@
+import os
+import dj_database_url
 """
 Django settings for group_management project.
 
@@ -51,6 +53,7 @@ GSHEETS = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # Added CORS middleware at the top
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -219,3 +222,43 @@ LOGGING = {
         },
     },
 }
+
+# Production settings for Render
+SECRET_KEY = os.environ.get('SECRET_KEY', 'tzMQ37cCO5nOcGD7cxB9D0g67hf9dYDXw7NbWqAtCbnZZ83_SL4N1mNSfhAgMqKNaKw')
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.onrender.com']
+
+# Database configuration
+import dj_database_url
+DATABASES = {
+    'default': dj_database_url.config(
+        default='sqlite:///db.sqlite3',
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
+}
+
+# Static files configuration
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Add whitenoise middleware - find MIDDLEWARE list and add this right after 'django.middleware.security.SecurityMiddleware'
+# Look for MIDDLEWARE = [ ... ] and insert 'whitenoise.middleware.WhiteNoiseMiddleware' as the second item
+
+# CORS settings (update after frontend is deployed)
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'http://localhost:5000',
+]
+
+# Security settings for production
+if not DEBUG:
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
